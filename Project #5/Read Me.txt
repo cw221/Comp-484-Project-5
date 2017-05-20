@@ -1,0 +1,31 @@
+Poker Game Project 5:
+
+To start:
+-node.js command prompt
+-change directory to where this file is located
+-"nodemon app.js" on cmd to start server.
+-open client "localhost:3000"
+
+Player(2-4)
+-To play, you must enter temporary name which cannot be duplicates of other player's.
+-Once name has been selected, press start game.
+-When all active player hits start game, game will start.
+
+-Uses betting system instead of score system. 
+-Each betting phase, you can raise bet only once. This limit is reset when someone else bids higher than you.
+-If you die, you are out of the round but you do not have to further bet for rest of the round.
+-Winner takes all the bet at the end of the round.
+-You are defeated if you have 0 coins.
+-If you are the only player left standing, you are the winner.
+-Leaving has same action as being defeated.
+
+-2 phase of buring and 3 phase of betting per round.
+-message log on the side announces actions of other players.
+-Deck is reset and reshuffled after every round.
+
+issues:
+-Under certain situation, (4 player game where everyone burns their whole hand both burn phase) if deck is thinned out, it returns a error.
+-disconnect or exiting a client or refreshing, in mid game screws over the game.
+
+
+***Ace is considered lowest value for this game but 10->J->Q->K->A as a straight still works***

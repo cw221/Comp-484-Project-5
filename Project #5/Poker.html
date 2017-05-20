@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="/socket.io/socket.io.js"></script>
+	<style>
+		.container{
+			display: flex;
+		}
+		.fixed{
+			width: 600px;
+		}
+		.flex-item{
+			flex-grow: 1;
+		}
+		.scrollable-object{
+			overflow: scroll;
+			height: 250px;
+			background-color:white;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="Log" style="background-color:pink;color:black;padding:20px;">
+		<div id="error-container"></div>
+			<input id="name" type="text" name="name" value="" placeholder="Enter your temporary ID!">
+			<button type="button" name="button" onclick="setUsername()">Join Game</button>
+	</div>	
+		
+    <div class="container">
+		<div id="Poker_UI" class="fixed" style="background-color:pink;color:black;padding:20px;">
+			<div id="current-bet"></div>
+			<div id="bet-container"></div>
+			<div id="system-container"></div>
+			<input type="number" id="myBet" value="1" min="1" max="25">
+			<button id="Bet1" onclick="RaiseBet()">Raise Bet</button>
+			<button id="Bet2" onclick="FinishBet()">Finish Bet</button>
+			<button id="Bet3" onclick="Die()">Die</button>
+			<button id="Burning" onclick="Burn()">Burn Selected Cards</button>
+			<form>
+				Card 1<input type="radio" id="Card1">
+				Card 2<input type="radio" id="Card2">
+				Card 3<input type="radio" id="Card3">
+				Card 4<input type="radio" id="Card4">
+				Card 5<input type="radio" id="Card5">
+				<input type="reset"/>
+			</form>
+			<div id="card-container"></div>
+		
+		</div> 
+	
+		<div id="LogIn" class="flex-item" style="background-color:pink;color:black;padding:20px;">
+			<input type="text" id="message">
+			<button type="button" name="button" onclick="sendMessage()">Send</button>
+			<button id="Start" type="button" name="button" onclick="Start()">Start Game</button>
+			<button type="button" name="button" onclick="LogOut()">Leave</button>
+			<div id="message-container" class="scrollable-object" ></div>
+		</div>
+    </div>
+	
+    <script>
+		//initialization functions such as log in, log out
+		document.getElementById("LogIn").style.visibility = 'hidden';
+		var socket = io();
+        function setUsername(){
+            socket.emit('setUsername', document.getElementById('name').value);
+        };
+		
+		function Start(){
+			document.getElementById('Start').disabled = true;
+            socket.emit('GameReady', user);
+        };
+		
+		function LogOut(){
+            socket.emit('LogOut', user);
+        };
+		
+        var user;
+        socket.on('userExists', function(data){
+            document.getElementById('error-container').innerHTML = data;
+        });
+        socket.on('userSet', function(data){
+            user = data.username;
+			document.getElementById("Log").innerHTML = '<h2>Poker:'+user+'</h2>';
+            document.getElementById("LogIn").style.visibility = 'visible';
+        });
+		
+		socket.on('userLeft', function(data){
+			document.getElementById('Poker_UI').innerHTML = '<div>You left the game!<button type="button" name="button" onclick="close()">Exit</button></div>';
+            document.getElementById("LogIn").style.visibility = 'hidden';
+			document.getElementById("Log").style.visibility = 'visible';
+        });
+		
+		//Extra method, not really under project requirement. 
+        function sendMessage(){
+            var msg = document.getElementById('message').value;
+            if(msg){
+                socket.emit('msg', {message: msg, user: user});
+            }
+        }
+
+        socket.on('newmsg', function(data){
+            if(user){
+                document.getElementById('message-container').innerHTML += '<div><b>' + data.user + '</b>: ' + data.message + '</div>';
+            }
+        })
+		
+		socket.on('send', function(data){
+            if(user){
+                document.getElementById('message-container').innerHTML += '<div><b>' + data+'</div>';
+            }
+        })
+		
+		socket.on('readyBroadcast', function(data){
+            if(user){
+                document.getElementById('message-container').innerHTML += '<div><b>' + data + ' is ready!</div>';
+            }
+        })
+		
+		
+		
+	</script>
+
+    <script>
+		//contains required objects and functions for a card, hand. hand size is 5
+        function Card(CardNumber, CardSuit, CardValue) {
+            this.Number = CardNumber;
+            this.Suit = CardSuit;
+            this.Value = CardValue;
+            this.toString = function () { return this.Number + " of " + this.Suit + " " }
+            this.getNumber = function () { return this.Number }
+            this.getSuit = function () { return this.Suit }
+            this.getValue = function () { return this.Value }
+        }
+
+        function Hand() {
+            this.Cards = [];
+			this.HandPowerValue=[];
+            this.addCards = function (next) {
+                if (this.Cards.length < 5)
+                    this.Cards.push(next);
+				this.Cards.sort(function(a,b){return a.getValue()-b.getValue()});
+            }
+            this.discardCards = function (a) {
+                this.Cards.splice(a,1);
+            }
+            this.getHandSize = function () { return this.Cards.length }
+            this.toString = function () { return this.Cards.toString() }
+            this.getHighest = function () {
+                var max = this.Cards[0];
+                for (i = 1; i < this.Cards.length; i++) {
+                    if (this.Cards[i].getValue() > max.getValue()) max = this.Cards[i];
+                }
+                return max;
+            }
+			this.isDouble = function () {
+				var Double=false;
+				for (i=1;i<this.Cards.length;i++) {
+					if (this.Cards[i].getValue()==this.Cards[i-1].getValue()) {
+						Double=true;
+					}
+				}
+				return Double;
+			}
+			this.isTwoPair = function () {
+				var TwoPair=false;
+				var FirstPair=false;
+				for (i=1;i<this.Cards.length;i++) {
+					if (this.Cards[i].getValue()==this.Cards[i-1].getValue()) {
+						if (!FirstPair) {
+							FirstPair=true;
+						} else {
+							if (this.Cards[i-2].getValue()!=this.Cards[i-1].getValue()) {
+								TwoPair=true;
+							}
+						}
+					}
+				}
+				return TwoPair;
+			}
+			this.isTriple = function () {
+				var Triple=false;
+				for (i=2;i<this.Cards.length;i++) {
+					if (this.Cards[i].getValue()==this.Cards[i-1].getValue()&&this.Cards[i-1].getValue()==this.Cards[i-2].getValue()) {
+						Triple=true;
+					}
+				}
+				return Triple;
+			}
+			this.isStraight = function () {
+				var Straight = false;
+				if ((this.Cards[4].getValue()==this.Cards[3].getValue()+1 || (this.Cards[4].getValue()==0&& this.Cards[3].getValue()==12))&&
+					this.Cards[3].getValue()==this.Cards[2].getValue()+1 &&
+					this.Cards[2].getValue()==this.Cards[1].getValue()+1 &&
+					this.Cards[1].getValue()==this.Cards[0].getValue()+1) 
+					Straight = true;
+				return Straight;
+			}
+			this.isFlush = function () {
+				var Flush = false;
+				if (this.Cards[4].getSuit()==this.Cards[3].getSuit() &&
+					this.Cards[3].getSuit()==this.Cards[2].getSuit() &&
+					this.Cards[2].getSuit()==this.Cards[1].getSuit() &&
+					this.Cards[1].getSuit()==this.Cards[0].getSuit()) 
+					Flush = true;
+				return Flush;
+			}
+			this.isFullHouse = function () {
+				var FullHouse = false;
+				if (this.Cards[4].getValue()==this.Cards[3].getValue() &&
+					this.Cards[0].getValue()==this.Cards[1].getValue() &&
+					(this.Cards[2].getValue()==this.Cards[1].getValue() ||
+					this.Cards[3].getValue()==this.Cards[2].getValue())) 
+					Flush = true;
+				return FullHouse;
+			}
+			this.isFourOfAKind = function () {
+				var Four=false;
+				for (i=3;i<this.Cards.length;i++) {
+					if (this.Cards[i].getValue()==this.Cards[i-1].getValue()&&
+						this.Cards[i-1].getValue()==this.Cards[i-2].getValue() &&
+						this.Cards[i-2].getValue()==this.Cards[i-3].getValue()) {
+						Triple=true;
+					}
+				}
+				return Four;
+			}
+			this.isStraightFlush = function () {
+				var StraightFlush=false;
+				if (this.isStraight()&&this.isFlush()) StraightFlush=true;
+				return StraightFlush;
+			}
+			this.isRoyalFlush = function () {
+				var RoyalFlush=false;
+				if (this.isStraight()&&this.isFlush()&&this.Cards[i].getValue()==0) RoyalFlush=true;
+				return RoyalFlush;
+			}
+			this.getHandPower = function () {
+				this.HandPowerValue[0]=1;
+				this.HandPowerValue[1]=this.getHighest().getValue();
+				if (this.isDouble()) {
+					this.HandPowerValue[0]=2;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isTwoPair()) {
+					this.HandPowerValue[0]=3;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isTriple()) {
+					this.HandPowerValue[0]=4;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isStraight()) {
+					this.HandPowerValue[0]=5;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isFlush()) {
+					this.HandPowerValue[0]=6;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isFullHouse()) {
+					this.HandPowerValue[0]=7;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isFourOfAKind()) {
+					this.HandPowerValue[0]=8;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isStraightFlush()) {
+					this.HandPowerValue[0]=9;
+					this.HandPowerValue[1]=1;
+				}
+				if (this.isRoyalFlush()) {
+					this.HandPowerValue[0]=10;
+					this.HandPowerValue[1]=1;
+				}
+				
+				return this.HandPowerValue;
+			}
+        }
+    </script>
+		
+    <script>
+        var newHand = new Hand();
+		var Coins = 25;
+		var currentBet = 0;
+		var currentHighestBet = 0;
+		var dead = false;
+		document.getElementById('Burning').disabled = true;
+		document.getElementById('Bet1').disabled = true;
+		document.getElementById('Bet2').disabled = true;
+		document.getElementById('Bet3').disabled = true;
+		
+		//command to start the game
+		socket.on('ready', function(data){
+            if(user){
+				newHand = new Hand();
+                document.getElementById('message-container').innerHTML += '<div><b>Game will now start!</div>';
+				document.getElementById('system-container').innerHTML = '<div><b>Add your bets</div>';
+				for (i=0;i<5;i++) {
+					RequestCard();
+				}
+				Coins--;
+				currentBet = 1;
+				currentHighestBet=1;
+				document.getElementById('bet-container').innerHTML = '<div><b>Highest Bet:' + 1 + 'Your Bet:'+currentBet+' </div>'
+				document.getElementById('current-bet').innerHTML = '<div><b>Your current coins'+Coins+'Your current bet:'+currentBet+'</div>';
+				document.getElementById('Bet1').disabled = false;
+				document.getElementById('Bet2').disabled = false;
+				document.getElementById('Bet3').disabled = false;
+				document.getElementById("myBet").max = Coins;
+            }
+			
+        })
+		
+		//raise bet. player can only raise bet once per betting phase
+		//If other player(s) make higher bet, this count is refreshed 
+		function RaiseBet() {
+			if (Coins >0) {
+				document.getElementById('Bet1').disabled = true;
+				var bet =Number(document.getElementById('myBet').value);
+				currentBet += bet;
+				Coins -= Number(document.getElementById('myBet').value);
+				document.getElementById('myBet').value=1;
+				document.getElementById("myBet").max = Coins;
+				document.getElementById('current-bet').innerHTML = '<div><b>Your current coins'+Coins+'Your current bet:'+currentBet+'</div>';
+				socket.emit('raiseBet', {total:currentBet,add:bet,user:user,coin:Coins});
+			} else {
+				document.getElementById('system-container').innerHTML = '<div><b>Error! You do not have anymore coins to bet!</div>';
+			}
+		}
+		
+		//request to end bet. cannot be used if your bet does not meet the current bet.
+		//If you are broke, you can request to end bet without restriction.
+		function FinishBet() {
+			if (currentBet >= currentHighestBet || Coins==0) {
+				document.getElementById('Bet1').disabled = true;
+				document.getElementById('Bet2').disabled = true;
+				document.getElementById('Bet3').disabled = true;
+				socket.emit('finishBet', user);
+			} else {
+				document.getElementById('system-container').innerHTML = '<div><b>Error! You must meet the current bet! </div>';
+			}
+		}
+		
+		//receive card from server deck.
+		function RequestCard() {
+			var newCard;
+			socket.emit('drawCard', '');
+		}
+		
+		//give up the current round. You will not regain coins you have bet but you do not need to bet anymore
+		function Die() {
+			currentBet = 0;
+			dead = true;
+			document.getElementById('Burning').disabled = true;
+			document.getElementById('Bet1').disabled = true;
+			document.getElementById('Bet2').disabled = true;
+			document.getElementById('Bet3').disabled = true;
+			socket.emit('die', user);
+		}
+		
+		//close window (doesnt work)
+		function Close() {
+			window.close();
+		}
+		
+		//select and burn cards
+		function Burn() {
+			var burnCard=0;
+			if (document.getElementById('Card5').checked == true){
+				newHand.discardCards(4);
+				burnCard++
+			}
+			if (document.getElementById('Card4').checked == true){
+				newHand.discardCards(3);
+				burnCard++
+			}
+			if (document.getElementById('Card3').checked == true){
+				newHand.discardCards(2);
+				burnCard++
+			}
+			if (document.getElementById('Card2').checked == true){
+				newHand.discardCards(1);
+				burnCard++
+			}
+			if (document.getElementById('Card1').checked == true){
+				newHand.discardCards(0);
+				burnCard++
+			}
+			for (i=newHand.getHandSize();i<5;i++) {
+				RequestCard();
+			}
+			document.getElementById('Card5').checked=false;
+			document.getElementById('Card4').checked=false;
+			document.getElementById('Card3').checked=false;
+			document.getElementById('Card2').checked=false;
+			document.getElementById('Card1').checked=false;
+			document.getElementById('Burning').disabled = true;
+			socket.emit('finishedBurn', {user:user,num:burnCard});
+		}
+		
+		//adds received cards into hand
+		socket.on('receiveCard', function(data){
+			newCard = new Card(data.Number,data.Suit,data.Value);
+			newHand.addCards(newCard);
+			document.getElementById('card-container').innerHTML = '<div><b>' + newHand + ' </div>';
+			document.getElementById('current-bet').innerHTML = '<div><b>Your current coins'+Coins+'Your current bet:'+currentBet+'</div>';
+		})
+		
+		//starts the burning phase
+		socket.on('startBurn', function(data){
+			if (!dead) {
+				document.getElementById('Burning').disabled = false;
+				document.getElementById('Bet1').disabled = true;
+				document.getElementById('Bet2').disabled = true;
+				document.getElementById('Bet3').disabled = true;
+			}
+		})
+		
+		//ending the round, calculating results.
+		socket.on('finishRound', function(data){
+			document.getElementById('Burning').disabled = true;
+			document.getElementById('Bet1').disabled = true;
+			document.getElementById('Bet2').disabled = true;
+			document.getElementById('Bet3').disabled = true;
+			document.getElementById('current-bet').innerHTML = '<div><b>Your current coins'+Coins+'Your current bet:'+currentBet+'</div>'
+			var yourHand = newHand.getHandPower();
+			if (dead) {
+				yourHand=[-1,-1];
+			}
+			socket.emit('calculateRound', yourHand);
+		})
+		
+		//start betting phase.
+		socket.on('startBet', function(data){
+			if (!dead) {
+				document.getElementById('Bet1').disabled = false;
+				document.getElementById('Bet2').disabled = false;
+				document.getElementById('Bet3').disabled = false;
+			}
+		})
+		
+		//other players died in current round
+		socket.on('SingleRemain', function(data){
+			document.getElementById('Burning').disabled = true;
+			document.getElementById('Bet1').disabled = true;
+			document.getElementById('Bet2').disabled = true;
+			document.getElementById('Bet3').disabled = true;
+			socket.emit('finishBet', 0);
+		})
+		
+		//message that pops when other players still has not made a move
+		socket.on('waitingResponse', function(data){
+			document.getElementById('system-container').innerHTML = '<div><b>Waiting for other Player</div>';
+		})
+		
+		//calculate if you are winner
+		socket.on('WinorLose', function(data){
+			document.getElementById('message-container').innerHTML = '<div><b>Round Result</div>';
+			var yourHand = newHand.getHandPower();
+			if (dead) {
+				yourHand=[-1,-1];
+			}
+			if (!dead) {
+				socket.emit('msg', {message: newHand.toString(), user: user});
+			}
+			if (yourHand[0]==data.Winner && yourHand[1]==data.Power&&data.NumofWinner==1) {
+				document.getElementById('system-container').innerHTML = '<div><b>You are Winner!</div>';
+				socket.emit('winnerBroadcast', {name:user,Power:yourHand[0]});
+				Coins += data.Winning;
+				currentBet = 0;
+				currentHighestBet = 0;
+			} else {
+				if (yourHand[0]==data.Winner && yourHand[1]==data.Power&&data.NumofWinner>1) {
+					document.getElementById('system-container').innerHTML = '<div><b>Tied Victory! '+data.NumofWinner+' way split</div>';
+					socket.emit('tiedWinnerBroadcast', {name:user,Power:yourHand[0]});
+					Coins += Math.floor((data.Winning)/(data.NumofWinner));
+					currentBet = 0;
+					currentHighestBet = 0;
+				} else {
+					document.getElementById('system-container').innerHTML = '<div><b>You are Loser!</div>'
+					currentBet = 0;
+					currentHighestBet = 0;
+				}
+			}
+			dead=false;
+			document.getElementById('current-bet').innerHTML = '<div><b>Your current coins'+Coins+'Your current bet:'+currentBet+'</div>';
+			if (Coins >0) {
+				socket.emit('GameReady', user);
+			} else {
+				socket.emit('PlayerOut', user);
+			}
+		})
+		
+		//close on defeat
+		socket.on('close', function(data){
+			document.getElementById('Poker_UI').innerHTML = '<div>You have been Defeated!<button type="button" name="button" onclick="close()">Exit</button></div>';
+		})
+		
+		//victory line
+		socket.on('victory', function(data){
+			document.getElementById('system-container').innerHTML = '<div><b>You are the final victor!<br>Please refresh the page for a new game.</div>';
+		})
+		
+		//someone betted higher than current bet
+		socket.on('mustMeet', function(data){
+			if (data>currentBet) {
+				document.getElementById('Bet1').disabled = false;
+				document.getElementById('Bet2').disabled = false;
+				document.getElementById('Bet3').disabled = false;
+			}
+			currentHighestBet = data;
+			document.getElementById('system-container').innerHTML = '<div><b>Bet Raised</div>'
+			document.getElementById('bet-container').innerHTML = '<div><b>Highest Bet:' + data + 'Your Bet:'+currentBet+' </div>'
+		})
+        
+    </script>
+
+</body>
+</html>
